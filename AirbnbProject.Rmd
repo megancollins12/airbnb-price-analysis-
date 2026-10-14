@@ -1,0 +1,215 @@
+---
+title: "Airbnb Price Analysis"
+author: "Megan Collins"
+date: "04-09-2026"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(readr)
+```
+
+# Introduction
+
+This project analyzes Airbnb listing data to understand the factors that influence pricing in Bangkok, Thailand. Listing prices vary widely due to differences in property characteristics, room type, and customer demand.
+
+Airbnb is a global platform where pricing directly impacts host revenue and booking performance. Hosts must balance pricing strategies, as setting prices too high can reduce bookings, while setting them too low can limit earnings. Many hosts rely on demand indicators such as the number of reviews; however, it remains unclear whether demand is the primary driver of pricing.
+
+Prices also vary significantly within the same city, suggesting that structural features such as room type and property characteristics may play a more dominant role than demand alone. This motivates the need to examine which factors most strongly explain variation in listing prices.
+
+From a data warehousing perspective, Airbnb listing data can be structured as a fact table, where price represents a measurable fact and variables such as room type and number of reviews function as dimensions. This structure enables efficient aggregation and comparison across attributes, similar to operations in a star schema or OLAP environment.
+
+This study examines whether pricing is driven more by structural characteristics or customer demand.
+
+The research question is:
+
+**To what extent do room type and customer demand (measured by number of reviews) influence Airbnb pricing in Bangkok, and which factor plays a more dominant role?**
+
+
+# Data
+
+The dataset used in this analysis is sourced from Inside Airbnb and contains listing-level information for properties in Bangkok, Thailand. It includes detailed information on listing prices, structural characteristics, and demand indicators, allowing for direct analysis of factors influencing Airbnb pricing.
+
+The dataset consists of 28,806 listings and 79 variables. Key variables used in this analysis include price, room_type, number_of_reviews, and accommodates. The variable price serves as the response variable, room_type represents structural characteristics, number_of_reviews is used as a proxy for customer demand, and accommodates accounts for differences in property size and capacity.
+
+These variables align directly with the research objective of comparing structural characteristics and demand in determining pricing.
+
+One limitation is that number_of_reviews is only a proxy for demand and may not fully capture actual booking activity. Additionally, the dataset is limited to Bangkok, which may affect generalizability. Other potentially important variables, such as location detail, amenities, and host characteristics, are not included. Despite these limitations, the dataset provides a strong foundation for analyzing pricing patterns across a large and diverse set of listings.
+
+## Data Preparation and Structure
+
+Before analysis, the dataset was prepared to ensure accuracy and consistency. The price variable was originally stored as a character field with currency symbols and was converted to numeric format. Missing and invalid values were removed to maintain data quality.
+
+From a data warehousing perspective, the dataset can be viewed as a fact table where each row represents an individual listing. The variable price serves as the measurable fact, while room type, number of reviews, and accommodates function as dimensions describing each listing.
+
+This structure enables efficient aggregation and analysis across dimensions, similar to operations in a star schema or OLAP environment, transforming raw data into a format suitable for decision-making.
+```{r, include=FALSE}
+airbnb <- read_csv("/Users/mrcolli/Desktop/DSA 8660/listings-B.csv")
+```
+
+
+# Method
+
+The dataset was prepared to ensure accuracy and consistency. 
+
+The data preparation follows an ETL (Extract, Transform, Load) framework:
+
+- Extract: The Airbnb dataset was imported from a CSV file.
+- Transform: The price variable was cleaned and converted to numeric format, and invalid or missing values were removed.
+- Load: The cleaned dataset (airbnb_clean) was stored for analysis.
+
+Summary statistics were computed to assess the distribution, central tendency, and variability of Airbnb prices. Due to skewness and extreme values, both descriptive statistics and visualizations were used to better understand pricing patterns.
+
+To evaluate the research question, a multiple linear regression model was used. The model estimates the relationship between price (response variable) and key predictors, including room type (structural characteristic), number of reviews (measure for demand), and accommodates (property capacity), while controlling for other variables.
+
+```{r}
+airbnb_clean <- airbnb %>%
+  mutate(price = as.numeric(gsub("[$,]", "", price))) %>%
+  filter(!is.na(price), price > 0)
+```
+
+## Summary Statistic for Price
+
+Summary statistics were computed to evaluate the distribution, central tendency, and variability of Airbnb listing prices.
+
+```{r}
+model <- lm(price ~ room_type + number_of_reviews + accommodates, data = airbnb_clean)
+summary(model)
+
+summary(airbnb_clean$price)
+sd(airbnb_clean$price)
+```
+
+Airbnb prices are highly right-skewed, with the mean (2529) substantially higher than the median (1379), indicating the presence of high-priced outliers. The extremely large maximum value (1,000,000) further highlights the variability in listing prices.
+
+This distribution suggests that pricing varies significantly across listings and is influenced by multiple factors, including structural characteristics and demand.
+
+To better analyze this skewed distribution, a log transformation and filtered visualizations were used. A log-scaled histogram was used to examine the overall distribution, while a filtered histogram highlights the typical price range. A boxplot compares price differences across room types, and scatterplots examine relationships between price and key predictors.
+
+The regression model is specified as follows:
+
+\[
+\text{price}_i = \beta_0 + \beta_1(\text{room\_type}_i) + \beta_2(\text{number\_of\_reviews}_i) + \beta_3(\text{accommodates}_i) + \epsilon_i
+\]
+
+This model estimates the effect of each predictor on price while holding the other variables constant.
+
+
+# Results
+
+To quantify the relationship between price and key predictors, a multiple linear regression model was estimated using room type, number of reviews, and accommodates. The results show that accommodates is the strongest predictor of price. For each additional guest a listing can accommodate, price increases by approximately $719, holding other variables constant (p < 0.001). This indicates that property size and capacity are major drivers of Airbnb pricing. Customer demand, measured by number of reviews, has a small but statistically significant negative relationship with price (p = 0.0135). Listings with more reviews tend to have slightly lower prices. This suggests that highly reviewed listings may adopt more competitive pricing strategies rather than increasing prices based on demand alone.
+
+With respect to room type, shared rooms are significantly less expensive than entire homes (p = 0.021), while hotel rooms and private rooms do not show statistically significant differences. This indicates that extreme differences in room type affect pricing, but not all categories contribute equally. The overall model is statistically significant (p < 0.001); however, the R-squared value is low \( R^2 \approx 0.011 \), indicating that the model explains only a small portion of price variation. This suggests that other factors, such as location, amenities, and listing quality, also influence pricing.
+
+These results indicate that structural characteristics—particularly accommodates and, to a lesser extent, room type—have a stronger and more consistent effect on pricing than customer demand. This directly answers the research question: while both room type and customer demand influence pricing, structural characteristics have a stronger and more consistent effect than demand indicators. The summary statistics by room type further illustrate differences in pricing levels and variability across listing categories.
+```{r}
+airbnb_clean %>%
+  group_by(room_type) %>%
+  summarise(
+    mean_price = mean(price),
+    median_price = median(price),
+    sd_price = sd(price),
+    n = n()
+  )
+```
+
+## Price Distribution (Log Scale)
+
+```{r}
+ggplot(airbnb_clean, aes(price)) +
+  geom_histogram(fill = "purple", bins = 30) +
+  scale_x_log10() + labs(title="Price Distribution (Log Scale)")
+```
+The log-scaled histogram confirms a highly right-skewed distribution with significant variability, supporting the need to analyze key predictors. The log-scaled histogram shows a highly right-skewed distribution, with most listings concentrated in a moderate price range and a small number of extreme high values.
+
+
+## Price Distribution (Filtered)
+
+```{r}
+airbnb_clean2 <- airbnb_clean %>%
+  filter(price <= 5000)
+
+ggplot(airbnb_clean2, aes(x = price)) +
+  geom_histogram(fill = "orange", bins = 30) + labs(title="Price Distribution (Filtered)")
+```
+After filtering extreme values, the distribution becomes more interpretable and highlights the typical price range of Airbnb listings. Most listings are concentrated in the lower to mid-price range, indicating that pricing is generally competitive. This clearer view of the central distribution supports the analysis of how factors such as room type and demand influence typical pricing behavior.
+
+## Price by Room Type
+
+```{r}
+ggplot(airbnb_clean2, aes(x = room_type, y = price, fill = room_type)) +
+  geom_boxplot() + labs(title="Price by Room Type in Bangkok")
+```
+The boxplot shows clear differences in price across room types, with entire homes and hotel rooms having higher median prices than private and shared rooms. This indicates that room type is an important structural factor in pricing. 
+
+## Price vs. Reviews
+
+This finding challenges the common assumption that higher demand leads to higher prices.
+
+```{r}
+ggplot(airbnb_clean2, aes(x = number_of_reviews, y = price)) +
+  geom_point(color = "orange", alpha = 0.5) +
+  geom_smooth(method = "lm", color = "purple") + labs(title="Price vs Number of Reviews")
+```
+The scatterplot shows a very weak relationship between the number of reviews and price, with points widely dispersed across all price levels. The log-scaled histogram shows a highly right-skewed distribution, with most listings concentrated in a moderate price range and a small number of extreme high values.
+
+
+## Average Price by Room Type
+```{r}
+airbnb_clean2 %>%
+  group_by(room_type) %>%
+  summarise(avg_price = mean(price)) %>%
+  ggplot(aes(room_type, avg_price, fill = room_type)) +
+  geom_col() + labs(title="Average Price by Room Type")
+```
+The bar chart shows average prices across room types, confirming that hotel rooms and entire homes have higher average prices, while private and shared rooms are lower.
+
+
+## Price vs. Accommodates
+```{r}
+ggplot(airbnb_clean2, aes(accommodates, price, color = room_type)) +
+  geom_point(alpha = .3) +
+  geom_smooth(method = "lm", se = FALSE) + labs(title="Price vs. Accommodates")
+```
+The scatterplot shows a clear positive relationship between accommodates and price, indicating that listings that host more guests tend to have higher prices. This pattern is strongest for entire homes and private rooms, while shared rooms show only a small increase and hotel rooms remain relatively flat. 
+
+## Regression Results
+```{r}
+library(ggplot2)
+library(gridExtra)
+
+# Plot 1: Price vs Reviews (Demand)
+p1 <- ggplot(airbnb_clean2, aes(x = number_of_reviews, y = price)) +
+  geom_point(color = "orange", alpha = 0.5) +
+  geom_smooth(method = "lm", color = "purple") +
+  labs(title = "Price vs Reviews (Demand)",
+       x = "Number of Reviews",
+       y = "Price")
+
+# Plot 2: Price vs Accommodates (Structure)
+p2 <- ggplot(airbnb_clean2, aes(x = accommodates, y = price)) +
+  geom_point(color = "purple", alpha = 0.5) +
+  geom_smooth(method = "lm", color = "orange") +
+  labs(title = "Price vs Accommodates (Structure)",
+       x = "Number of Guests (Accommodates)",
+       y = "Price")
+
+# Combine side by side
+grid.arrange(p1, p2, ncol = 2)
+```
+To directly compare the influence of customer demand and structural characteristics on pricing, scatterplots with fitted linear regression lines were examined side by side. The results show that price has a very weak relationship with the number of reviews, indicating that demand does not strongly influence pricing. In contrast, the relationship between price and accommodates is clearly positive, suggesting that structural characteristics, particularly capacity, have a stronger impact on price. This visual comparison supports the conclusion that structural features are more important drivers of Airbnb pricing than demand indicators.
+
+
+# Data Warehousing Insight
+
+From a data warehousing perspective, this analysis demonstrates how Airbnb listing data can be structured to support decision-making. By organizing the data into measurable facts (price) and descriptive dimensions (room type, number of reviews, and accommodates), the dataset enables efficient aggregation and comparison across key attributes. For example, analysts can evaluate average prices by room type or examine pricing trends based on capacity, similar to OLAP operations in a data warehouse. In practice, incorporating additional dimensions such as location, amenities, and seasonal demand would further enhance analytical capabilities and support more advanced pricing strategies.
+
+# Conclusion
+
+This analysis demonstrates how data management principles and statistical modeling can be combined to generate meaningful insights from Airbnb data. The results show that pricing in Bangkok is driven primarily by structural listing characteristics rather than customer demand. While listings with more reviews indicate higher popularity, they do not consistently command higher prices.
+Among the factors analyzed, accommodates has the strongest influence on price, indicating that property size and capacity are the most important determinants. Room type also plays a significant role, with entire homes and hotel rooms priced higher on average, while private and shared rooms are more affordable. In contrast, the number of reviews has only a minimal effect on price. This finding challenges the common assumption that higher demand leads to higher pricing and instead highlights the importance of structural features.
+
+From a managerial perspective, hosts should prioritize structural characteristics such as room type, capacity, and amenities when setting prices, rather than relying on demand indicators like review count. Hosts may also benefit from increasing guest capacity, as larger listings are associated with higher prices. Additionally, pricing strategies should be adjusted based on listing type, with premium pricing for entire homes and more competitive pricing for private or shared rooms. While reviews remain important for credibility and visibility, they should not be the primary driver of pricing decisions.
+
+Overall, this study shows that structuring data using data warehousing concepts and applying statistical analysis provides clear insight into pricing behavior. A limitation of this analysis is the low explanatory power of the model \( R^2 \approx 0.011 \), suggesting that additional factors such as location, amenities, host characteristics, and seasonal demand likely influence pricing. Future research should incorporate these variables to develop a more comprehensive model. These insights can be used by Airbnb hosts and property managers to develop more effective pricing strategies and improve revenue optimization in competitive markets.
